@@ -795,12 +795,12 @@ end)
 
 -- FreeCam Button Logic
 freeCamBtn.MouseButton1Click:Connect(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/rqzmy/09/refs/heads/main/2"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/9nwQpzm/m9f2/refs/heads/main/2"))()
 end)
 
 -- Copy Hat IDs Button Logic
 copyHatBtn.MouseButton1Click:Connect(function()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/rqzmy/09/refs/heads/main/cc"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/9nwQpzm/m9f2/refs/heads/main/cc"))()
 end)
 
 local xnxxActive = false
