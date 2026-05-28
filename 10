@@ -1,0 +1,992 @@
+
+
+if _G.SiextherVD then
+    for _, v in pairs(_G.SiextherVD) do pcall(function() v:Disconnect() end) end
+    _G.SiextherVD = nil
+end
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+
+_G.SiextherVD = {}
+local Connections = _G.SiextherVD
+
+
+-- NOTIFY
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Fleast/hankill/refs/heads/main/Notify.lua"))()
+
+local function Notif(title, content, duration)
+    pcall(function()
+        getgenv().Notify({
+            Title    = title or "SIEXTHER VD",
+            Content  = content or "",
+            Duration = duration or 3,
+        })
+    end)
+end
+
+
+-- THEME
+
+local C = {
+    bg      = Color3.fromRGB(25, 25, 35),
+    surface = Color3.fromRGB(20, 20, 32),
+    card    = Color3.fromRGB(26, 26, 40),
+    stroke  = Color3.fromRGB(70, 130, 255),
+    accent  = Color3.fromRGB(100, 180, 255),
+    text    = Color3.fromRGB(230, 230, 240),
+    subtext = Color3.fromRGB(120, 130, 155),
+    onClr   = Color3.fromRGB(70, 130, 255),
+    offClr  = Color3.fromRGB(38, 38, 52),
+    red     = Color3.fromRGB(220, 60, 60),
+    redHov  = Color3.fromRGB(255, 80, 80),
+    minClr  = Color3.fromRGB(40, 90, 200),
+    minHov  = Color3.fromRGB(70, 130, 255),
+}
+
+local TW = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+
+-- HELPERS
+
+local function tween(obj, props) TweenService:Create(obj, TW, props):Play() end
+
+local function corner(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 8)
+    c.Parent = parent
+    return c
+end
+
+local function stroke(parent, color, thick)
+    local s = Instance.new("UIStroke")
+    s.Color = color or C.stroke
+    s.Thickness = thick or 1.5
+    s.Parent = parent
+    return s
+end
+
+
+-- IS KILLER DETECTION
+
+local function IsKiller(player)
+    if not player or player == LocalPlayer then return false end
+    if player:GetAttribute("Role") == "Killer" or player:GetAttribute("Killerost") then return true end
+    local char = player.Character
+    if char then
+        for _, n in ipairs({"Weapon","Knife","Axe","Sword","Gun","KillerTool","MurderTool"}) do
+            if char:FindFirstChild(n) then return true end
+        end
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Tool") then
+                local nm = child.Name:lower()
+                if nm:find("weapon") or nm:find("knife") or nm:find("gun") then return true end
+            end
+        end
+    end
+    return false
+end
+
+
+-- CROSSHAIR
+
+local function ToggleCrosshair(state)
+    local nm = "SVD_CrosshairGui"
+    local cg = game:GetService("CoreGui")
+    local ex = cg:FindFirstChild(nm) or PlayerGui:FindFirstChild(nm)
+    if ex then ex:Destroy() end
+    if not state then return end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = nm; gui.DisplayOrder = 1000
+    gui.IgnoreGuiInset = true; gui.ResetOnSpawn = false
+
+    local ring = Instance.new("Frame")
+    ring.AnchorPoint = Vector2.new(0.5, 0.5)
+    ring.Size = UDim2.fromOffset(14, 14)
+    ring.Position = UDim2.fromScale(0.5, 0.5)
+    ring.BackgroundTransparency = 1
+    ring.Parent = gui
+    stroke(ring, C.stroke, 1.5)
+    corner(ring, 7)
+
+    local dot = Instance.new("Frame")
+    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+    dot.Size = UDim2.fromOffset(4, 4)
+    dot.Position = UDim2.fromScale(0.5, 0.5)
+    dot.BackgroundColor3 = C.accent
+    dot.BorderSizePixel = 0
+    dot.Parent = gui
+    corner(dot, 2)
+
+    gui.Parent = cg
+end
+
+
+-- NOCLIP
+
+local function ToggleNoclip(state)
+    if Connections.NoclipLoop then
+        pcall(function() Connections.NoclipLoop:Disconnect() end)
+        Connections.NoclipLoop = nil
+    end
+
+    if state then
+        Connections.NoclipLoop = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        p.CanCollide = false
+                    end
+                end
+            end
+        end)
+        Notif("SIEXTHER VD", "Noclip ON", 2)
+    else
+        local char = LocalPlayer.Character
+        if char then
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.CanCollide = true
+                end
+            end
+        end
+        Notif("SIEXTHER VD", "Noclip OFF", 2)
+    end
+end
+
+
+-- SURVIVOR ESP
+
+local SurvivorESPActive = false
+
+local function ClearSurvivorESP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            if char then
+                local hl = char:FindFirstChild("SVD_SurvHL")
+                if hl then hl:Destroy() end
+                local bb = char:FindFirstChild("SVD_SurvBB")
+                if bb then bb:Destroy() end
+            end
+        end
+    end
+end
+
+local function ApplySurvivorESPToChar(char, player)
+    if not char then return end
+
+    if not char:FindFirstChild("SVD_SurvHL") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "SVD_SurvHL"
+        hl.FillColor = Color3.fromRGB(70, 130, 255)
+        hl.OutlineColor = Color3.fromRGB(130, 180, 255)
+        hl.FillTransparency = 0.4
+        hl.OutlineTransparency = 0
+        hl.Adornee = char
+        hl.Parent = char
+    end
+
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    if rootPart and not char:FindFirstChild("SVD_SurvBB") then
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "SVD_SurvBB"
+        bb.Size = UDim2.new(0, 90, 0, 34)
+        bb.StudsOffset = Vector3.new(0, 3.5, 0)
+        bb.AlwaysOnTop = true
+        bb.Adornee = rootPart
+        bb.Parent = char
+
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.Size = UDim2.new(1, 0, 0.55, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextColor3 = Color3.fromRGB(70, 130, 255)
+        nameLbl.TextStrokeTransparency = 0
+        nameLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLbl.TextSize = 11
+        nameLbl.Text = player.Name
+        nameLbl.Parent = bb
+
+        local distLbl = Instance.new("TextLabel")
+        distLbl.Size = UDim2.new(1, 0, 0.45, 0)
+        distLbl.Position = UDim2.new(0, 0, 0.55, 0)
+        distLbl.BackgroundTransparency = 1
+        distLbl.Font = Enum.Font.Gotham
+        distLbl.TextColor3 = Color3.fromRGB(160, 190, 255)
+        distLbl.TextStrokeTransparency = 0
+        distLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLbl.TextSize = 9
+        distLbl.Text = "..."
+        distLbl.Parent = bb
+
+        table.insert(Connections, RunService.RenderStepped:Connect(function()
+            if not SurvivorESPActive then return end
+            local lc = LocalPlayer.Character
+            local hrp = lc and lc:FindFirstChild("HumanoidRootPart")
+            if hrp and rootPart and rootPart.Parent then
+                local dist = math.floor((hrp.Position - rootPart.Position).Magnitude)
+                distLbl.Text = dist .. " studs"
+            end
+        end))
+    end
+end
+
+local function ToggleSurvivorESP(state)
+    SurvivorESPActive = state
+    if Connections.SurvESPLoop then
+        pcall(function() Connections.SurvESPLoop:Disconnect() end)
+        Connections.SurvESPLoop = nil
+    end
+
+    if state then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and not IsKiller(p) and p.Character then
+                ApplySurvivorESPToChar(p.Character, p)
+            end
+        end
+        Connections.SurvESPLoop = RunService.Heartbeat:Connect(function()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and not IsKiller(p) and p.Character then
+                    if not p.Character:FindFirstChild("SVD_SurvHL") then
+                        ApplySurvivorESPToChar(p.Character, p)
+                    end
+                end
+            end
+        end)
+        Notif("SIEXTHER VD", "Survivor ESP ON", 2)
+    else
+        ClearSurvivorESP()
+        Notif("SIEXTHER VD", "Survivor ESP OFF", 2)
+    end
+end
+
+
+-- KILLER ESP
+
+local KillerESPActive = false
+
+local function ClearKillerESP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local char = p.Character
+            if char then
+                local hl = char:FindFirstChild("SVD_KillerHL")
+                if hl then hl:Destroy() end
+                local bb = char:FindFirstChild("SVD_KillerBB")
+                if bb then bb:Destroy() end
+            end
+        end
+    end
+end
+
+local function ApplyKillerESPToChar(char, player)
+    if not char then return end
+
+    if not char:FindFirstChild("SVD_KillerHL") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "SVD_KillerHL"
+        hl.FillColor = Color3.fromRGB(220, 30, 30)
+        hl.OutlineColor = Color3.fromRGB(255, 80, 80)
+        hl.FillTransparency = 0.4
+        hl.OutlineTransparency = 0
+        hl.Adornee = char
+        hl.Parent = char
+    end
+
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    if rootPart and not char:FindFirstChild("SVD_KillerBB") then
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "SVD_KillerBB"
+        bb.Size = UDim2.new(0, 90, 0, 34)
+        bb.StudsOffset = Vector3.new(0, 3.5, 0)
+        bb.AlwaysOnTop = true
+        bb.Adornee = rootPart
+        bb.Parent = char
+
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.Size = UDim2.new(1, 0, 0.55, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextColor3 = Color3.fromRGB(255, 80, 80)
+        nameLbl.TextStrokeTransparency = 0
+        nameLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLbl.TextSize = 11
+        nameLbl.Text = player.Name
+        nameLbl.Parent = bb
+
+        local distLbl = Instance.new("TextLabel")
+        distLbl.Size = UDim2.new(1, 0, 0.45, 0)
+        distLbl.Position = UDim2.new(0, 0, 0.55, 0)
+        distLbl.BackgroundTransparency = 1
+        distLbl.Font = Enum.Font.Gotham
+        distLbl.TextColor3 = Color3.fromRGB(255, 180, 180)
+        distLbl.TextStrokeTransparency = 0
+        distLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLbl.TextSize = 9
+        distLbl.Text = "..."
+        distLbl.Parent = bb
+
+        table.insert(Connections, RunService.RenderStepped:Connect(function()
+            if not KillerESPActive then return end
+            local lc = LocalPlayer.Character
+            local hrp = lc and lc:FindFirstChild("HumanoidRootPart")
+            if hrp and rootPart and rootPart.Parent then
+                local dist = math.floor((hrp.Position - rootPart.Position).Magnitude)
+                distLbl.Text = dist .. " studs"
+            end
+        end))
+    end
+end
+
+local function ToggleKillerESP(state)
+    KillerESPActive = state
+    if Connections.KillerESPLoop then
+        pcall(function() Connections.KillerESPLoop:Disconnect() end)
+        Connections.KillerESPLoop = nil
+    end
+
+    if state then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and IsKiller(p) and p.Character then
+                ApplyKillerESPToChar(p.Character, p)
+            end
+        end
+        Connections.KillerESPLoop = RunService.Heartbeat:Connect(function()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and IsKiller(p) and p.Character then
+                    if not p.Character:FindFirstChild("SVD_KillerHL") then
+                        ApplyKillerESPToChar(p.Character, p)
+                    end
+                end
+            end
+        end)
+        Notif("SIEXTHER VD", "Killer ESP ON", 2)
+    else
+        ClearKillerESP()
+        Notif("SIEXTHER VD", "Killer ESP OFF", 2)
+    end
+end
+
+
+-- GENERATOR ESP
+
+local GeneratorESPActive = false
+local GEN_HL_TAG = "SVD_GenHL"
+local GEN_BB_TAG = "SVD_GenBB"
+
+local function ClearGeneratorESP()
+    for _, obj in ipairs(game:GetService("Workspace"):GetDescendants()) do
+        if obj.Name == GEN_HL_TAG or obj.Name == GEN_BB_TAG then
+            pcall(function() obj:Destroy() end)
+        end
+    end
+end
+
+local function GetGenerators()
+    local gens = {}
+    local seen = {}
+    local keywords = {"Generator", "generator", "Generat", "generat"}
+    for _, obj in ipairs(game:GetService("Workspace"):GetDescendants()) do
+        if not seen[obj] then
+            for _, kw in ipairs(keywords) do
+                if obj.Name:find(kw) and (obj:IsA("BasePart") or obj:IsA("Model")) then
+                    seen[obj] = true
+                    table.insert(gens, obj)
+                    break
+                end
+            end
+        end
+    end
+    return gens
+end
+
+local function GetNearestGenerator()
+    local lc = LocalPlayer.Character
+    local hrp = lc and lc:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil, nil, math.huge end
+
+    local gens = GetGenerators()
+    local nearest, nearestPart, nearestDist = nil, nil, math.huge
+
+    for _, gen in ipairs(gens) do
+        local part = gen:IsA("Model")
+            and (gen.PrimaryPart or gen:FindFirstChildWhichIsA("BasePart"))
+            or gen
+        if part then
+            local dist = (hrp.Position - part.Position).Magnitude
+            if dist < nearestDist then
+                nearestDist = dist
+                nearest = gen
+                nearestPart = part
+            end
+        end
+    end
+
+    return nearest, nearestPart, nearestDist
+end
+
+local _currentGenObj  = nil
+local _currentGenPart = nil
+local _currentGenDist = math.huge
+
+local function RefreshGeneratorESP()
+    if not GeneratorESPActive then return end
+
+    local newGen, newPart, newDist = GetNearestGenerator()
+
+    if not newGen then
+        ClearGeneratorESP()
+        _currentGenObj  = nil
+        _currentGenPart = nil
+        _currentGenDist = math.huge
+        return
+    end
+
+    if newGen == _currentGenObj then
+        _currentGenDist = newDist
+        return
+    end
+
+    ClearGeneratorESP()
+    _currentGenObj  = newGen
+    _currentGenPart = newPart
+    _currentGenDist = newDist
+
+    if not newGen:FindFirstChild(GEN_HL_TAG) then
+        local hl = Instance.new("Highlight")
+        hl.Name = GEN_HL_TAG
+        hl.FillColor = Color3.fromRGB(255, 200, 0)
+        hl.OutlineColor = Color3.fromRGB(255, 240, 80)
+        hl.FillTransparency = 0.45
+        hl.OutlineTransparency = 0
+        hl.Adornee = newGen
+        hl.Parent = newGen
+    end
+
+    if not newPart:FindFirstChild(GEN_BB_TAG) then
+        local bb = Instance.new("BillboardGui")
+        bb.Name = GEN_BB_TAG
+        bb.Size = UDim2.new(0, 100, 0, 30)
+        bb.StudsOffset = Vector3.new(0, 4, 0)
+        bb.AlwaysOnTop = true
+        bb.Adornee = newPart
+        bb.Parent = newPart
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Name = "SVD_GenLbl"
+        lbl.Size = UDim2.new(1, 0, 1, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextColor3 = Color3.fromRGB(255, 230, 0)
+        lbl.TextStrokeTransparency = 0
+        lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        lbl.TextSize = 11
+        lbl.Text = "Generator"
+        lbl.Parent = bb
+    end
+end
+
+local function ToggleGeneratorESP(state)
+    GeneratorESPActive = state
+
+    if Connections.GenESPLoop then
+        pcall(function() Connections.GenESPLoop:Disconnect() end)
+        Connections.GenESPLoop = nil
+    end
+    if Connections.GenDistLoop then
+        pcall(function() Connections.GenDistLoop:Disconnect() end)
+        Connections.GenDistLoop = nil
+    end
+
+    if state then
+        Connections.GenESPLoop = RunService.Heartbeat:Connect(function()
+            if not GeneratorESPActive then return end
+            task.wait(2)
+            if GeneratorESPActive then RefreshGeneratorESP() end
+        end)
+
+        Connections.GenDistLoop = RunService.RenderStepped:Connect(function()
+            if not GeneratorESPActive then return end
+            if not _currentGenPart or not _currentGenPart.Parent then return end
+            local lc = LocalPlayer.Character
+            local hrp = lc and lc:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            local bb = _currentGenPart:FindFirstChild(GEN_BB_TAG)
+            if bb then
+                local lbl = bb:FindFirstChild("SVD_GenLbl")
+                if lbl then
+                    local dist = math.floor((hrp.Position - _currentGenPart.Position).Magnitude)
+                    lbl.Text = "Generator [" .. dist .. "m]"
+                end
+            end
+        end)
+
+        RefreshGeneratorESP()
+        Notif("SIEXTHER VD", "Generator ESP ON", 3)
+    else
+        ClearGeneratorESP()
+        _currentGenObj  = nil
+        _currentGenPart = nil
+        _currentGenDist = math.huge
+        Notif("SIEXTHER VD", "Generator ESP OFF", 2)
+    end
+end
+
+
+-- TELEPORT
+
+local function TeleportToSurvivor()
+    local lc = LocalPlayer.Character
+    if not lc or not lc:FindFirstChild("HumanoidRootPart") then return end
+    local tgt, md = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and not IsKiller(p) and p.Character
+            and p.Character:FindFirstChild("HumanoidRootPart") then
+            local d = (lc.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude
+            if d < md then md = d; tgt = p end
+        end
+    end
+    if tgt then
+        lc.HumanoidRootPart.CFrame = tgt.Character.HumanoidRootPart.CFrame
+        Notif("SIEXTHER VD", "Teleported to " .. tgt.Name, 2)
+    else
+        Notif("SIEXTHER VD", "No survivor found", 2)
+    end
+end
+
+local function TeleportToKiller()
+    local lc = LocalPlayer.Character
+    if not lc or not lc:FindFirstChild("HumanoidRootPart") then return end
+    local tgt, md = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and IsKiller(p) and p.Character
+            and p.Character:FindFirstChild("HumanoidRootPart") then
+            local d = (lc.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude
+            if d < md then md = d; tgt = p end
+        end
+    end
+    if tgt then
+        lc.HumanoidRootPart.CFrame = tgt.Character.HumanoidRootPart.CFrame
+        Notif("SIEXTHER VD", "Teleported to Killer: " .. tgt.Name, 2)
+    else
+        Notif("SIEXTHER VD", "No killer found", 2)
+    end
+end
+
+
+-- MAIN SCREEN GUI
+
+local Root = Instance.new("ScreenGui")
+Root.Name = "SiextherVD_GUI"
+Root.DisplayOrder = 999
+Root.ResetOnSpawn = false
+Root.IgnoreGuiInset = true
+Root.Parent = PlayerGui
+
+local FULL_H    = 340
+local FULL_SIZE = UDim2.new(0, 240, 0, FULL_H)
+
+
+-- FLOATING SX BUTTON
+
+local floatBtn = Instance.new("TextButton")
+floatBtn.Name = "FloatSX"
+floatBtn.Size = UDim2.new(0, 41, 0, 41)
+floatBtn.Position = UDim2.new(0, 18, 0.5, -21)
+floatBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+floatBtn.Text = "⚔️"
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.TextColor3 = C.accent
+floatBtn.TextSize = 20
+floatBtn.BorderSizePixel = 0
+floatBtn.Visible = false
+floatBtn.Draggable = true
+floatBtn.ZIndex = 200
+floatBtn.Parent = Root
+corner(floatBtn, 12)
+
+
+
+
+do
+    local fd, fds, fsp = false, nil, nil
+    floatBtn.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            fd = true; fds = i.Position; fsp = floatBtn.Position
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then fd = false end
+            end)
+        end
+    end)
+    table.insert(Connections, UserInputService.InputChanged:Connect(function(i)
+        if fd and (i.UserInputType == Enum.UserInputType.MouseMovement
+            or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - fds
+            floatBtn.Position = UDim2.new(fsp.X.Scale, fsp.X.Offset + d.X,
+                                           fsp.Y.Scale, fsp.Y.Offset + d.Y)
+        end
+    end))
+end
+
+
+-- MAIN FRAME
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = FULL_SIZE
+Main.Position = UDim2.new(0.5, -120, 0.5, -170)
+Main.BackgroundColor3 = C.bg
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = Root
+corner(Main, 12)
+stroke(Main, C.stroke, 1.8)
+
+local grad = Instance.new("UIGradient")
+grad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 22, 38)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 18)),
+})
+grad.Rotation = 135
+grad.Parent = Main
+
+
+-- TITLE BAR
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 32)
+TitleBar.BackgroundColor3 = C.surface
+TitleBar.BorderSizePixel = 0
+TitleBar.ZIndex = 10
+TitleBar.Parent = Main
+corner(TitleBar, 12)
+
+local tbFix = Instance.new("Frame")
+tbFix.Size = UDim2.new(1, 0, 0, 14)
+tbFix.Position = UDim2.new(0, 0, 1, -14)
+tbFix.BackgroundColor3 = C.surface
+tbFix.BorderSizePixel = 0
+tbFix.ZIndex = 10
+tbFix.Parent = TitleBar
+
+local accentBar = Instance.new("Frame")
+accentBar.Size = UDim2.new(0, 3, 0.7, 0)
+accentBar.Position = UDim2.new(0, 6, 0.15, 0)
+accentBar.BackgroundColor3 = C.stroke
+accentBar.BorderSizePixel = 0
+accentBar.ZIndex = 12
+accentBar.Parent = TitleBar
+corner(accentBar, 2)
+
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Size = UDim2.new(1, -100, 1, 0)
+titleLbl.Position = UDim2.new(0, 16, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text = "SIEXTHER  VD"
+titleLbl.Font = Enum.Font.GothamBold
+titleLbl.TextColor3 = Color3.fromRGB(70, 130, 255)
+titleLbl.TextSize = 15
+titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+titleLbl.ZIndex = 12
+titleLbl.Parent = TitleBar
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 22, 0, 18)
+minBtn.Position = UDim2.new(1, -50, 0.5, -9)
+minBtn.BackgroundColor3 = C.minClr
+minBtn.BorderSizePixel = 0
+minBtn.Text = "–"
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.TextSize = 10
+minBtn.ZIndex = 13
+minBtn.Parent = TitleBar
+corner(minBtn, 5)
+
+minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = C.minHov}) end)
+minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = C.minClr}) end)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 22, 0, 18)
+closeBtn.Position = UDim2.new(1, -26, 0.5, -9)
+closeBtn.BackgroundColor3 = C.red
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 10
+closeBtn.ZIndex = 13
+closeBtn.Parent = TitleBar
+corner(closeBtn, 5)
+
+closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = C.redHov}) end)
+closeBtn.MouseLeave:Connect(function() tween(closeBtn, {BackgroundColor3 = C.red}) end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    ToggleCrosshair(false)
+    ToggleNoclip(false)
+    ToggleSurvivorESP(false)
+    ToggleKillerESP(false)
+    ToggleGeneratorESP(false)
+    for k, v in pairs(Connections) do
+        pcall(function()
+            if typeof(v) == "RBXScriptConnection" then v:Disconnect() end
+        end)
+        Connections[k] = nil
+    end
+    _G.SiextherVD = nil
+    Root:Destroy()
+end)
+
+minBtn.MouseButton1Click:Connect(function()
+    tween(Main, {Size = UDim2.new(0, 240, 0, 0)})
+    task.wait(0.18)
+    Main.Visible = false
+    floatBtn.Visible = true
+end)
+
+floatBtn.MouseButton1Click:Connect(function()
+    floatBtn.Visible = false
+    Main.Visible = true
+    Main.Size = UDim2.new(0, 240, 0, 0)
+    tween(Main, {Size = FULL_SIZE})
+end)
+
+
+-- DRAG MAIN
+
+do
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+    TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = Main.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    TitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                                       startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end))
+end
+
+
+-- SCROLL CONTENT
+
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1, -12, 1, -40)
+Scroll.Position = UDim2.new(0, 6, 0, 36)
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+Scroll.ScrollBarThickness = 2
+Scroll.ScrollBarImageColor3 = C.stroke
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Scroll.Parent = Main
+
+local Layout = Instance.new("UIListLayout")
+Layout.Padding = UDim.new(0, 4)
+Layout.SortOrder = Enum.SortOrder.LayoutOrder
+Layout.Parent = Scroll
+
+local Pad = Instance.new("UIPadding")
+Pad.PaddingBottom = UDim.new(0, 6)
+Pad.Parent = Scroll
+
+Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 10)
+end)
+
+local order = 0
+local function nextO() order = order + 1; return order end
+
+
+-- DIVIDER
+
+local function Divider(txt)
+    local f = Instance.new("Frame")
+    f.LayoutOrder = nextO()
+    f.Size = UDim2.new(1, 0, 0, 22)
+    f.BackgroundTransparency = 1
+    f.Parent = Scroll
+
+    local line1 = Instance.new("Frame")
+    line1.Size = UDim2.new(0.5, -55, 0, 1)
+    line1.Position = UDim2.new(0, 0, 0.5, 0)
+    line1.BackgroundColor3 = Color3.fromRGB(40, 50, 72)
+    line1.BorderSizePixel = 0
+    line1.Parent = f
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 100, 1, 0)
+    lbl.Position = UDim2.new(0.5, -50, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = txt
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextColor3 = C.stroke
+    lbl.TextSize = 9
+    lbl.TextXAlignment = Enum.TextXAlignment.Center
+    lbl.Parent = f
+
+    local line2 = Instance.new("Frame")
+    line2.Size = UDim2.new(0.5, -55, 0, 1)
+    line2.Position = UDim2.new(0.5, 55, 0.5, 0)
+    line2.BackgroundColor3 = Color3.fromRGB(40, 50, 72)
+    line2.BorderSizePixel = 0
+    line2.Parent = f
+end
+
+
+-- TOGGLE
+
+local function Toggle(txt, default, cb)
+    local f = Instance.new("Frame")
+    f.LayoutOrder = nextO()
+    f.Size = UDim2.new(1, 0, 0, 30)
+    f.BackgroundColor3 = C.card
+    f.BorderSizePixel = 0
+    f.Parent = Scroll
+    corner(f, 7)
+    stroke(f, Color3.fromRGB(35, 35, 55), 1)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -56, 1, 0)
+    lbl.Position = UDim2.new(0, 9, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = txt
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextColor3 = C.text
+    lbl.TextSize = 9
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = f
+
+    local pill = Instance.new("TextButton")
+    pill.Size = UDim2.new(0, 42, 0, 18)
+    pill.Position = UDim2.new(1, -48, 0.5, -9)
+    pill.BackgroundColor3 = default and C.onClr or C.offClr
+    pill.BorderSizePixel = 0
+    pill.Text = default and "ON" or "OFF"
+    pill.Font = Enum.Font.GothamBold
+    pill.TextColor3 = Color3.fromRGB(255, 255, 255)
+    pill.TextSize = 8
+    pill.Parent = f
+    corner(pill, 5)
+
+    local state = default
+    pill.MouseButton1Click:Connect(function()
+        state = not state
+        pill.Text = state and "ON" or "OFF"
+        tween(pill, {BackgroundColor3 = state and C.onClr or C.offClr})
+        cb(state)
+    end)
+
+    return f
+end
+
+
+-- BUTTON
+
+local function Button(txt, cb)
+    local btn = Instance.new("TextButton")
+    btn.LayoutOrder = nextO()
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.BackgroundColor3 = C.card
+    btn.BorderSizePixel = 0
+    btn.Text = ""
+    btn.Parent = Scroll
+    corner(btn, 7)
+    stroke(btn, Color3.fromRGB(35, 35, 55), 1)
+
+    local inner = Instance.new("Frame")
+    inner.Size = UDim2.new(1, -16, 1, 0)
+    inner.Position = UDim2.new(0, 8, 0, 0)
+    inner.BackgroundTransparency = 1
+    inner.Parent = btn
+
+    local arw = Instance.new("TextLabel")
+    arw.Size = UDim2.new(0, 14, 1, 0)
+    arw.BackgroundTransparency = 1
+    arw.Text = "›"
+    arw.Font = Enum.Font.GothamBold
+    arw.TextColor3 = C.stroke
+    arw.TextSize = 14
+    arw.TextXAlignment = Enum.TextXAlignment.Left
+    arw.Parent = inner
+
+    local lbl2 = Instance.new("TextLabel")
+    lbl2.Size = UDim2.new(1, -16, 1, 0)
+    lbl2.Position = UDim2.new(0, 16, 0, 0)
+    lbl2.BackgroundTransparency = 1
+    lbl2.Text = txt
+    lbl2.Font = Enum.Font.GothamBold
+    lbl2.TextColor3 = C.text
+    lbl2.TextSize = 9
+    lbl2.TextXAlignment = Enum.TextXAlignment.Left
+    lbl2.Parent = inner
+
+    btn.MouseEnter:Connect(function()
+        tween(btn, {BackgroundColor3 = Color3.fromRGB(32, 32, 50)})
+        tween(arw, {TextColor3 = C.accent})
+    end)
+    btn.MouseLeave:Connect(function()
+        tween(btn, {BackgroundColor3 = C.card})
+        tween(arw, {TextColor3 = C.stroke})
+    end)
+    btn.MouseButton1Click:Connect(function()
+        tween(btn, {BackgroundColor3 = Color3.fromRGB(40, 60, 100)})
+        task.wait(0.12)
+        tween(btn, {BackgroundColor3 = C.card})
+        cb()
+    end)
+end
+
+
+-- BUILD UI
+
+Divider("S I E X T H E R")
+Toggle("Crosshair Center", false, function(v)
+    ToggleCrosshair(v)
+    Notif("SIEXTHER VD", "Crosshair " .. (v and "ON" or "OFF"), 2)
+end)
+Toggle("Noclip", false, function(v)
+    ToggleNoclip(v)
+end)
+
+Divider("TELEPORT")
+Button("Teleport to Survivor", TeleportToSurvivor)
+Button("Teleport to Killer",   TeleportToKiller)
+
+Divider("ESP")
+Toggle("Survivor ESP", false, function(v)
+    ToggleSurvivorESP(v)
+end)
+Toggle("Killer ESP", false, function(v)
+    ToggleKillerESP(v)
+end)
+Toggle("Generator ESP (Nearest)", false, function(v)
+    ToggleGeneratorESP(v)
+end)
+
+-- startup notify
+Notif("SIEXTHER VD", "HANN.SIEXTHER", 3)
